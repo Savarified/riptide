@@ -1,0 +1,279 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Render</title>
+</head>
+<body>
+    <div id="fps"></div>
+    <canvas id="myCanvas" width="600" height="400" style="border:1px solid #FFFF;">
+    </canvas>
+    <script>
+        const canvas = document.getElementById("myCanvas");
+        const WIDTH = canvas.width;
+        const HEIGHT = canvas.height;
+        const FPS = 600;
+        var _scale = 4;
+        const textureScale = 64;
+        const texture_paths = [
+            'textures/grass_block_side.png',
+            'textures/dirt.png',
+            'textures/stone.png',
+            'textures/oak_log.png',
+            'textures/cobblestone.png'];
+        let textures = [];
+        for(let i = 0; i < texture_paths.length; i++){
+            let tex = new Image(textureScale, textureScale);
+            tex.src = texture_paths[i];
+            textures.push(tex);
+        };
+
+        const player = new Object();
+        player.x = 4.75;
+        player.y = 6;
+        player.z = -13.5;
+        player.dy = 0;
+        player.speed = .25;
+
+        const cam = new Object();
+        cam.x = 0;
+        cam.y = 0;
+        cam.z = 0;
+        cam.rx = 0;
+        cam.ry = 0;
+        cam.rz = 0;
+
+        const cube = [
+            [0,1,0], // bottom
+            [1,1,0],
+            [1,1,1],
+            [0,1,1],
+            [0,0,1], // far face
+            [1,0,1],
+            [1,1,1],
+            [0,1,1],
+            [0,0,0], // left side
+            [0,1,0],
+            [0,1,1],
+            [0,0,1],
+            [1,0,0], // right side
+            [1,1,0],
+            [1,1,1],
+            [1,0,1],
+            [0,0,0], // top
+            [1,0,0],
+            [1,0,1],
+            [0,0,1],
+            [0,0,0], // close face
+            [1,0,0],
+            [1,1,0],
+            [0,1,0],
+        ];
+
+        
+        var voxel_registry = [];
+        var sca = 2
+        for(let k = sca; k >= 0 ; k--){
+            for(let n = sca; n >= 0; n--){
+                voxel_registry.push([k, n,k*n,cycle(0,4,k*n)]);
+            }
+        };
+        const eps = 0.001;
+        const s = [WIDTH, HEIGHT];
+        const r = [400, 266, 400];
+
+        const drawColor = `rgb(${255}, ${0}, ${255})`;
+
+        function cycle(a,b,t){
+            return a + ((t - a) % (b - a + 1));
+        }
+
+        function checkDepth(v){
+            return (v[2]-cam[2])**2 + (v[0]-cam[0])**2 + (v[1] - cam[1])**2;
+        }
+
+        function sortVoxels(){
+            //if (vox._registry) > 1: vox._registry.sort(key=lambda v: (v.z - _cam[2])**2 + (v.x - _cam[0])**2 + (v.y - _cam[1])**2, reverse=True)
+            if (voxel_registry <= 1){return false;}
+            voxel_registry.sort(v, checkDepth(v));
+        }
+
+        function drawQuad(ctx, points, texture_index) {
+            ctx.beginPath();
+            ctx.moveTo(points[0][0], points[0][1]);
+
+            for (let i = 1; i < points.length; i++) {
+                ctx.lineTo(points[i][0], points[i][1]);
+            }
+
+            ctx.closePath();
+            const pat = ctx.createPattern(textures[texture_index], "repeat");
+            //ctx.drawImage(textures[texture_index], 0, 0,  textureScale, textureScale);
+            ctx.fillStyle = pat;
+            ctx.fill();
+        }
+
+        function project(vert){ //perspective projection
+            let x = vert[0];
+            let y = vert[1];
+            let z = vert[2];
+            x *= _scale;
+            y *= -_scale;
+            z *= _scale;
+
+            x -= cam.x;
+            y += cam.y;
+            z -= cam.z - eps;
+            let xi = (x * s[0])/(z * r[0]) * r[2];
+            let yi = (y * s[1])/(z * r[1]) * r[2];
+
+            xi += 300;
+            yi += 200;
+
+            return [xi, yi];
+        }
+
+        function render(ctx){
+            for(let i = 0; i < voxel_registry.length; i++){ //for each voxel
+                let voxel = voxel_registry[i];
+                for(let i = 0; i < 6; i++){ //for each face in cube
+                    let face = i*4;
+                    let quad = [cube[face],cube[face+1],cube[face+2],cube[face+3]];
+                    let pts = [];
+                    for(let j = 0; j<4; j++){
+                        let vert = [...quad[j]];
+                        vert[0] += voxel[0];
+                        vert[1] += voxel[1];
+                        vert[2] += voxel[2];
+                        let pt = project(vert);
+                        pts.push(pt);
+                    };
+
+                    drawQuad(ctx, pts, voxel[3]);
+                };
+            };// if (vox._registry) > 1: vox._registry.sort(key=lambda v: (v.z - _cam[2])**2 + (v.x - _cam[0])**2 + (v.y - _cam[1])**2, reverse=True)
+        }
+
+        let WASD = [false, false, false, false];
+        const groundPlane = 6;
+        function playerMovement(){
+            const speed = player.speed;
+            cam.x = player.x;
+            cam.y = player.y;
+            cam.z = player.z;
+
+            if(WASD[0]){
+                player.z += speed;
+            }
+
+            if(WASD[2]){
+                player.z -= speed;
+            }
+
+            if(WASD[1]){
+                player.x -= speed;
+            }
+            if(WASD[3]){
+                player.x += speed;
+            }
+
+            if(player.y > groundPlane){
+                player.dy -= 0.025;
+            }
+            else if(player.y < groundPlane){
+                player.y = groundPlane;
+                player.dy = 0;
+            }
+
+            player.y += player.dy;
+        }
+
+        const jumpForce = 0.5;
+        function jump(){
+            console.log("jump!");
+            if(player.y == groundPlane){
+                player.dy+=jumpForce;
+            }
+        }
+
+        let lastTime = performance.now();
+        let fps_read = 0;
+        const backgroundColor = `rgb(${25}, ${25}, ${25})`;
+        function newFrame(){
+            const canvas = document.getElementById("myCanvas");
+            const ctx = canvas.getContext("2d");
+            ctx.fillStyle = backgroundColor;
+            ctx.fillRect(0, 0, canvas.width, canvas.height);
+            const now = performance.now();
+            const deltaTime = now - lastTime;
+            lastTime = now;
+
+            fps_read = 1000 / deltaTime;
+            document.getElementById("fps").textContent = Math.round(fps_read);
+            // Main loop
+            playerMovement();
+            render(ctx);
+
+            /*setTimeout(() => { //FPS handler
+            requestAnimationFrame(newFrame);
+            }, 1000 / FPS);*/
+            requestAnimationFrame(newFrame);
+        }
+
+        const KEY_W = 87,
+        KEY_A = 65,
+        KEY_S = 83,
+        KEY_D = 68
+
+        function keyPressed(evt){
+            if (evt.keyCode === 32) {
+                jump();
+            }
+            if (evt.keyCode == KEY_A) {
+                WASD[1] = true;
+            }
+            if (evt.keyCode == KEY_D) {
+                WASD[3] = true;
+            }
+            if (evt.keyCode == KEY_W) {
+                WASD[0] = true;
+            }
+            if (evt.keyCode == KEY_S) {
+                WASD[2] = true;
+            }
+            evt.preventDefault();
+        }
+
+        function keyReleased(evt){
+            if (evt.keyCode == KEY_A) {
+                WASD[1] = false;
+            }
+            if (evt.keyCode == KEY_D) {
+                WASD[3] = false;
+            }
+            if (evt.keyCode == KEY_W) {
+                WASD[0] = false;
+            }
+            if (evt.keyCode == KEY_S) {
+                WASD[2] = false;
+            }
+                evt.preventDefault();
+            }
+
+        document.addEventListener('keydown', keyPressed);
+        document.addEventListener('keyup', keyReleased);
+
+        requestAnimationFrame(newFrame);
+    </script>
+    <style>
+        body{
+            background-color: black;
+        }
+        div {
+            color: white;
+            font-family: 'Trebuchet MS', 'Lucida Sans Unicode', 'Lucida Grande', 'Lucida Sans', Arial, sans-serif;
+        }
+    </style>
+</body>
+</html>
