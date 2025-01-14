@@ -13,15 +13,24 @@
         const canvas = document.getElementById("myCanvas");
         const WIDTH = canvas.width;
         const HEIGHT = canvas.height;
-        const FPS = 600;
+        const FPS = 60;
+
+        //hide cursor
+        //canvas.style.cursor = "none"
+        canvas.addEventListener('click', () => {
+            canvas.requestPointerLock();
+        });
         var _scale = 4;
         const textureScale = 64;
         const texture_paths = [
-            'textures/grass_block_side.png',
+            'textures/grass_block_top.png',
             'textures/dirt.png',
             'textures/stone.png',
             'textures/oak_log.png',
-            'textures/cobblestone.png'];
+            'textures/cobblestone.png',
+            'textures/bookshelf.png',
+            'textures/obsidian.png',
+            'textures/nether_portal.png'];
         let textures = [];
         for(let i = 0; i < texture_paths.length; i++){
             let tex = new Image(textureScale, textureScale);
@@ -43,6 +52,8 @@
         cam.rx = 0;
         cam.ry = 0;
         cam.rz = 0;
+        cam.rotSpeed = (1/360) * 0.5;
+        cam.clipDistance;
 
         const cube = [
             [0,1,0], // bottom
@@ -71,12 +82,39 @@
             [0,1,0],
         ];
 
+        const cue = [
+            [0,0,0], // close face
+            [1,0,0],
+            [1,1,0],
+            [0,1,0],
+            [0,0,0], // close face
+            [1,0,0],
+            [1,1,0],
+            [0,1,0],
+            [0,0,0], // close face
+            [1,0,0],
+            [1,1,0],
+            [0,1,0],
+            [0,0,0], // close face
+            [1,0,0],
+            [1,1,0],
+            [0,1,0],
+            [0,0,0], // close face
+            [1,0,0],
+            [1,1,0],
+            [0,1,0],
+            [0,0,0], // close face
+            [1,0,0],
+            [1,1,0],
+            [0,1,0]
+        ];
+
         
         var voxel_registry = [];
-        var sca = 2
+        var sca = 2;
         for(let k = sca; k >= 0 ; k--){
             for(let n = sca; n >= 0; n--){
-                voxel_registry.push([k, n,k*n,cycle(0,4,k*n)]);
+                voxel_registry.push([k, n,n,cycle(0,textures.length-1,k+n)]);
             }
         };
         const eps = 0.001;
@@ -114,6 +152,35 @@
             ctx.fill();
         }
 
+        function rotate(vert){
+            let x = vert[0] - cam.x;
+            let y = vert[1] - cam.y;
+            let z = vert[2] - cam.z;
+        
+            let cosX = Math.cos(cam.rx), sinX = Math.sin(cam.rx);
+            let cosY = Math.cos(cam.ry), sinY = Math.sin(cam.ry);
+            let cosZ = Math.cos(cam.rz), sinZ = Math.sin(cam.rz);
+        
+            // rotation around z-axis
+            let x1 = x * cosZ - y * sinZ;
+            let y1 = x * sinZ + y * cosZ;
+        
+            // rotation around y-axis
+            let x2 = x1 * cosY + z * sinY;
+            let z2 = -x1 * sinY + z * cosY;
+        
+            // rotation around x-axis
+            let y3 = y1 * cosX - z2 * sinX;
+            let z3 = y1 * sinX + z2 * cosX;
+        
+            x2 += cam.x;
+            y3 += cam.y;
+            z3 += cam.z;
+        
+            return [x2, y3, z3];
+        }
+
+
         function project(vert){ //perspective projection
             let x = vert[0];
             let y = vert[1];
@@ -121,6 +188,8 @@
             x *= _scale;
             y *= -_scale;
             z *= _scale;
+
+            [x,y,z] = rotate([x,y,z]);
 
             x -= cam.x;
             y += cam.y;
@@ -132,6 +201,13 @@
             yi += 200;
 
             return [xi, yi];
+        }
+
+        function checkVisibility(vert){
+            [x,y,z] = rotate([...vert]);
+            
+            cam.clipDistance;
+
         }
 
         function render(ctx){
@@ -155,6 +231,7 @@
             };// if (vox._registry) > 1: vox._registry.sort(key=lambda v: (v.z - _cam[2])**2 + (v.x - _cam[0])**2 + (v.y - _cam[1])**2, reverse=True)
         }
 
+        //let mouseX = 0, mouseY = 0;
         let WASD = [false, false, false, false];
         const groundPlane = 6;
         function playerMovement(){
@@ -163,19 +240,27 @@
             cam.y = player.y;
             cam.z = player.z;
 
-            if(WASD[0]){
-                player.z += speed;
+
+            let lookDir = cam.ry/(2*Math.PI) * 360;
+            lookDir = (lookDir * Math.PI)/180;
+            if(WASD[0]){ //Z relative
+                player.z += Math.cos(lookDir) * speed;
+                player.x -= Math.sin(lookDir) * speed;
             }
 
             if(WASD[2]){
-                player.z -= speed;
+                player.z -= Math.cos(lookDir) * speed;
+                player.x += Math.sin(lookDir) * speed;
+            }
+
+            if(WASD[3]){ //X relative
+                player.x += Math.cos(lookDir) * speed;
+                player.z += Math.sin(lookDir) * speed;
             }
 
             if(WASD[1]){
-                player.x -= speed;
-            }
-            if(WASD[3]){
-                player.x += speed;
+                player.x -= Math.cos(lookDir) * speed;
+                player.z -= Math.sin(lookDir) * speed;
             }
 
             if(player.y > groundPlane){
@@ -186,6 +271,10 @@
                 player.dy = 0;
             }
 
+            cam.ry -= mouseX * cam.rotSpeed;
+            cam.rx += mouseY * cam.rotSpeed;
+
+            cam.ry = cycle(0, 2*Math.PI, cam.ry);
             player.y += player.dy;
         }
 
@@ -226,6 +315,8 @@
         KEY_S = 83,
         KEY_D = 68
 
+        let mouseX = 0, mouseY = 0;
+
         function keyPressed(evt){
             if (evt.keyCode === 32) {
                 jump();
@@ -263,6 +354,17 @@
 
         document.addEventListener('keydown', keyPressed);
         document.addEventListener('keyup', keyReleased);
+
+        //let prevX = 0;
+        //let prevY = 0;
+
+        document.addEventListener('mousemove', (event) => {
+            mouseX = event.movementX;//event.clientX - prevX;
+            mouseY = event.movementY;//event.clientY - prevY;
+
+            //prevX = event.clientX;
+            //prevY = event.clientY;
+        });
 
         requestAnimationFrame(newFrame);
     </script>
