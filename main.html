@@ -38,6 +38,7 @@
             textures.push(tex);
         };
 
+
         const player = new Object();
         player.x = 4.75;
         player.y = 6;
@@ -53,7 +54,7 @@
         cam.ry = 0;
         cam.rz = 0;
         cam.rotSpeed = (1/360) * 0.5;
-        cam.clipDistance;
+        cam.clipDistance = 2;
 
         const cube = [
             [0,1,0], // bottom
@@ -82,41 +83,16 @@
             [0,1,0],
         ];
 
-        const cue = [
-            [0,0,0], // close face
-            [1,0,0],
-            [1,1,0],
-            [0,1,0],
-            [0,0,0], // close face
-            [1,0,0],
-            [1,1,0],
-            [0,1,0],
-            [0,0,0], // close face
-            [1,0,0],
-            [1,1,0],
-            [0,1,0],
-            [0,0,0], // close face
-            [1,0,0],
-            [1,1,0],
-            [0,1,0],
-            [0,0,0], // close face
-            [1,0,0],
-            [1,1,0],
-            [0,1,0],
-            [0,0,0], // close face
-            [1,0,0],
-            [1,1,0],
-            [0,1,0]
-        ];
-
         
         var voxel_registry = [];
-        var sca = 2;
-        for(let k = sca; k >= 0 ; k--){
+        //voxel_registry.push([0, 0,0,cycle(0,textures.length-1,0)]);
+        var sca = 12;
+        for(let k = sca; k >= 0 ; k--){ //generate structure
             for(let n = sca; n >= 0; n--){
-                voxel_registry.push([k, n,n,cycle(0,textures.length-1,k+n)]);
+                voxel_registry.push([k, -1,n,cycle(0,textures.length-1,k+n)]);
             }
         };
+
         const eps = 0.001;
         const s = [WIDTH, HEIGHT];
         const r = [400, 266, 400];
@@ -127,12 +103,13 @@
             return a + ((t - a) % (b - a + 1));
         }
 
+        const [_0, _90, _180, _270, _360] = [0, Math.PI * 0.5, Math.PI, Math.PI*1.5, Math.PI*2];
+
         function checkDepth(v){
             return (v[2]-cam[2])**2 + (v[0]-cam[0])**2 + (v[1] - cam[1])**2;
         }
 
         function sortVoxels(){
-            //if (vox._registry) > 1: vox._registry.sort(key=lambda v: (v.z - _cam[2])**2 + (v.x - _cam[0])**2 + (v.y - _cam[1])**2, reverse=True)
             if (voxel_registry <= 1){return false;}
             voxel_registry.sort(v, checkDepth(v));
         }
@@ -147,7 +124,6 @@
 
             ctx.closePath();
             const pat = ctx.createPattern(textures[texture_index], "repeat");
-            //ctx.drawImage(textures[texture_index], 0, 0,  textureScale, textureScale);
             ctx.fillStyle = pat;
             ctx.fill();
         }
@@ -180,6 +156,10 @@
             return [x2, y3, z3];
         }
 
+        function clipCheck(z){
+            return (z <= cam.clipDistance);
+        }
+
 
         function project(vert){ //perspective projection
             let x = vert[0];
@@ -194,6 +174,10 @@
             x -= cam.x;
             y += cam.y;
             z -= cam.z - eps;
+
+            if (clipCheck(z)){
+                return false;
+            }
             let xi = (x * s[0])/(z * r[0]) * r[2];
             let yi = (y * s[1])/(z * r[1]) * r[2];
 
@@ -203,13 +187,6 @@
             return [xi, yi];
         }
 
-        function checkVisibility(vert){
-            [x,y,z] = rotate([...vert]);
-            
-            cam.clipDistance;
-
-        }
-
         function render(ctx){
             for(let i = 0; i < voxel_registry.length; i++){ //for each voxel
                 let voxel = voxel_registry[i];
@@ -217,21 +194,29 @@
                     let face = i*4;
                     let quad = [cube[face],cube[face+1],cube[face+2],cube[face+3]];
                     let pts = [];
-                    for(let j = 0; j<4; j++){
+                    let draw = true;
+                    for(let j = 0; j<4; j++){// for each vert in face
                         let vert = [...quad[j]];
                         vert[0] += voxel[0];
                         vert[1] += voxel[1];
                         vert[2] += voxel[2];
                         let pt = project(vert);
-                        pts.push(pt);
+                        if(!pt){
+                            draw = false;
+                            break;
+                        }
+                        else{
+                            pts.push(pt);
+                        }
                     };
-
-                    drawQuad(ctx, pts, voxel[3]);
+                    if (draw){
+                        drawQuad(ctx, pts, voxel[3]);
+                    }
                 };
-            };// if (vox._registry) > 1: vox._registry.sort(key=lambda v: (v.z - _cam[2])**2 + (v.x - _cam[0])**2 + (v.y - _cam[1])**2, reverse=True)
+            };
         }
 
-        //let mouseX = 0, mouseY = 0;
+
         let WASD = [false, false, false, false];
         const groundPlane = 6;
         function playerMovement(){
@@ -264,7 +249,7 @@
             }
 
             if(player.y > groundPlane){
-                player.dy -= 0.025;
+                player.dy -= 0.015;
             }
             else if(player.y < groundPlane){
                 player.y = groundPlane;
@@ -278,9 +263,8 @@
             player.y += player.dy;
         }
 
-        const jumpForce = 0.5;
+        const jumpForce = 0.25;
         function jump(){
-            console.log("jump!");
             if(player.y == groundPlane){
                 player.dy+=jumpForce;
             }
@@ -300,7 +284,7 @@
 
             fps_read = 1000 / deltaTime;
             document.getElementById("fps").textContent = Math.round(fps_read);
-            // Main loop
+            // main loop
             playerMovement();
             render(ctx);
 
@@ -355,15 +339,9 @@
         document.addEventListener('keydown', keyPressed);
         document.addEventListener('keyup', keyReleased);
 
-        //let prevX = 0;
-        //let prevY = 0;
-
         document.addEventListener('mousemove', (event) => {
-            mouseX = event.movementX;//event.clientX - prevX;
-            mouseY = event.movementY;//event.clientY - prevY;
-
-            //prevX = event.clientX;
-            //prevY = event.clientY;
+            mouseX = event.movementX;
+            mouseY = event.movementY;
         });
 
         requestAnimationFrame(newFrame);
